@@ -852,6 +852,12 @@ def test_api_endpoints():
     
     # Test 29: Reset Password - Valid Flow (Success)
     try:
+        # Save the old token key before reset (to verify it's invalidated)
+        old_token_key = token.key if hasattr(token, 'key') else None
+        
+        # Clear credentials before password reset (it's an unauthenticated endpoint)
+        client.credentials()
+        
         # Reset password with valid GST and matching passwords
         response = client.post('/auth/reset-password', {
             'gst_no': vendor.gst_no,
@@ -862,14 +868,19 @@ def test_api_endpoints():
             print("✓ POST /auth/reset-password (valid) - Working")
             results.append(True)
             
-            # Verify old token is invalid (should fail)
-            old_token_response = client.get('/items/')
-            if old_token_response.status_code == 401:
-                print("✓ Password reset invalidated old token - Working")
-                results.append(True)
-            else:
-                print(f"⚠ Old token still valid after reset - Status: {old_token_response.status_code}")
-                results.append(True)  # Not critical
+            # Verify old token is invalid (should fail) - try to use the old token
+            if old_token_key:
+                client.credentials(HTTP_AUTHORIZATION=f'Token {old_token_key}')
+                old_token_response = client.get('/items/')
+                if old_token_response.status_code == 401:
+                    print("✓ Password reset invalidated old token - Working")
+                    results.append(True)
+                else:
+                    print(f"⚠ Old token still valid after reset - Status: {old_token_response.status_code}")
+                    results.append(True)  # Not critical
+            
+            # Clear credentials for login (unauthenticated endpoint)
+            client.credentials()
             
             # Verify new password works (login with new password)
             login_response = client.post('/auth/login', {
@@ -883,6 +894,8 @@ def test_api_endpoints():
                 # Restore original password for other tests
                 test_user.set_password('testpass123')
                 test_user.save()
+                # Delete any existing tokens and create a new one
+                Token.objects.filter(user=test_user).delete()
                 token, _ = Token.objects.get_or_create(user=test_user)
                 client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
             else:
@@ -899,6 +912,9 @@ def test_api_endpoints():
     
     # Test 30: Reset Password - Non-Matching Passwords (Should Fail)
     try:
+        # Clear credentials (unauthenticated endpoint)
+        client.credentials()
+        
         response = client.post('/auth/reset-password', {
             'gst_no': vendor.gst_no,
             'new_password': 'password123',
@@ -916,6 +932,9 @@ def test_api_endpoints():
     
     # Test 31: Reset Password - Invalid GST (Should Fail)
     try:
+        # Clear credentials (unauthenticated endpoint)
+        client.credentials()
+        
         response = client.post('/auth/reset-password', {
             'gst_no': 'INVALIDGST999999',
             'new_password': 'password123',
@@ -933,6 +952,12 @@ def test_api_endpoints():
     
     # Test 32: Logout
     try:
+        # Ensure we have valid credentials for logout test
+        # (The previous tests may have cleared credentials, so restore them)
+        if not client._credentials:
+            token, _ = Token.objects.get_or_create(user=test_user)
+            client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
+        
         response = client.post('/auth/logout')
         if response.status_code in [200, 204]:
             print("✓ POST /auth/logout - Working")
