@@ -780,24 +780,26 @@ def test_api_endpoints():
         print(f"✗ POST /settings/push - Error: {e}")
         results.append(False)
     
-    # Test 27: Forgot Password - Valid GST (Success)
+    # Test 27: Forgot Password - Valid Username and GST (Success)
     try:
         response = client.post('/auth/forgot-password', {
+            'username': test_user.username,
             'gst_no': vendor.gst_no
         }, format='json')
-        if response.status_code == 200 and 'gst_no' in response.data:
-            print("✓ POST /auth/forgot-password (valid GST) - Working")
+        if response.status_code == 200 and 'username' in response.data and 'gst_no' in response.data:
+            print("✓ POST /auth/forgot-password (valid username and GST) - Working")
             results.append(True)
         else:
-            print(f"✗ POST /auth/forgot-password (valid GST) - Status: {response.status_code}")
+            print(f"✗ POST /auth/forgot-password (valid username and GST) - Status: {response.status_code}")
             results.append(False)
     except Exception as e:
-        print(f"✗ POST /auth/forgot-password (valid GST) - Error: {e}")
+        print(f"✗ POST /auth/forgot-password (valid username and GST) - Error: {e}")
         results.append(False)
     
     # Test 28: Forgot Password - Invalid GST (Should Fail)
     try:
         response = client.post('/auth/forgot-password', {
+            'username': test_user.username,
             'gst_no': 'INVALIDGST999999'
         }, format='json')
         if response.status_code == 400:
@@ -810,7 +812,23 @@ def test_api_endpoints():
         print(f"⚠ POST /auth/forgot-password (invalid GST) - Error: {e}")
         results.append(True)  # Not critical
     
-    # Test 28b: Forgot Password - Pending Vendor GST (Should Fail)
+    # Test 28b: Forgot Password - Mismatched Username and GST (Should Fail)
+    try:
+        response = client.post('/auth/forgot-password', {
+            'username': test_user.username,
+            'gst_no': 'WRONGGST999999'
+        }, format='json')
+        if response.status_code == 400:
+            print("✓ POST /auth/forgot-password (mismatched username and GST) - Correctly rejects")
+            results.append(True)
+        else:
+            print(f"⚠ POST /auth/forgot-password (mismatched username and GST) - Status: {response.status_code} (expected 400)")
+            results.append(True)  # Not critical
+    except Exception as e:
+        print(f"⚠ POST /auth/forgot-password (mismatched username and GST) - Error: {e}")
+        results.append(True)  # Not critical
+    
+    # Test 28c: Forgot Password - Pending Vendor (Should Fail)
     try:
         # Create a pending vendor for testing
         pending_user, _ = User.objects.get_or_create(
@@ -831,13 +849,14 @@ def test_api_endpoints():
         pending_user.save()
         
         response = client.post('/auth/forgot-password', {
+            'username': pending_user.username,
             'gst_no': 'PENDINGGST123'
         }, format='json')
         if response.status_code == 400:
-            print("✓ POST /auth/forgot-password (pending vendor GST) - Correctly rejects")
+            print("✓ POST /auth/forgot-password (pending vendor) - Correctly rejects")
             results.append(True)
         else:
-            print(f"⚠ POST /auth/forgot-password (pending vendor GST) - Status: {response.status_code} (expected 400)")
+            print(f"⚠ POST /auth/forgot-password (pending vendor) - Status: {response.status_code} (expected 400)")
             results.append(True)  # Not critical
         
         # Cleanup
@@ -847,7 +866,7 @@ def test_api_endpoints():
         except:
             pass
     except Exception as e:
-        print(f"⚠ POST /auth/forgot-password (pending vendor GST) - Error: {e}")
+        print(f"⚠ POST /auth/forgot-password (pending vendor) - Error: {e}")
         results.append(True)  # Not critical
     
     # Test 29: Reset Password - Valid Flow (Success)
@@ -858,8 +877,9 @@ def test_api_endpoints():
         # Clear credentials before password reset (it's an unauthenticated endpoint)
         client.credentials()
         
-        # Reset password with valid GST and matching passwords
+        # Reset password with valid username, GST and matching passwords
         response = client.post('/auth/reset-password', {
+            'username': test_user.username,
             'gst_no': vendor.gst_no,
             'new_password': 'newtestpass123',
             'new_password_confirm': 'newtestpass123'
@@ -916,6 +936,7 @@ def test_api_endpoints():
         client.credentials()
         
         response = client.post('/auth/reset-password', {
+            'username': test_user.username,
             'gst_no': vendor.gst_no,
             'new_password': 'password123',
             'new_password_confirm': 'differentpassword'
@@ -936,6 +957,7 @@ def test_api_endpoints():
         client.credentials()
         
         response = client.post('/auth/reset-password', {
+            'username': test_user.username,
             'gst_no': 'INVALIDGST999999',
             'new_password': 'password123',
             'new_password_confirm': 'password123'

@@ -94,25 +94,30 @@ def logout(request):
 @permission_classes([AllowAny])
 def forgot_password(request):
     """
-    POST /auth/forgot-password - Verify GST number to initiate password reset
-    Body: {"gst_no": "29ABCDE1234F1Z5"}
-    Returns: {"message": "GST number verified. You can now reset your password.", "gst_no": "29ABCDE1234F1Z5"}
+    POST /auth/forgot-password - Verify username and GST number to initiate password reset
+    Body: {
+        "username": "vendor1",
+        "gst_no": "29ABCDE1234F1Z5"
+    }
+    Returns: {"message": "Username and GST number verified. You can now reset your password.", ...}
     """
     serializer = ForgotPasswordSerializer(data=request.data)
     
     if serializer.is_valid():
+        username = serializer.validated_data['username']
         gst_no = serializer.validated_data['gst_no']
-        vendor = Vendor.objects.get(gst_no=gst_no)
+        user = User.objects.get(username=username)
+        vendor = user.vendor_profile
         
         return Response({
-            'message': 'GST number verified. You can now reset your password.',
+            'message': 'Username and GST number verified. You can now reset your password.',
+            'username': username,
             'gst_no': gst_no,
-            'business_name': vendor.business_name,
-            'username': vendor.user.username
+            'business_name': vendor.business_name
         }, status=status.HTTP_200_OK)
     
     return Response({
-        'error': 'GST number verification failed',
+        'error': 'Username and GST number verification failed',
         'details': serializer.errors
     }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -120,8 +125,9 @@ def forgot_password(request):
 @permission_classes([AllowAny])
 def reset_password(request):
     """
-    POST /auth/reset-password - Reset password using GST number
+    POST /auth/reset-password - Reset password using username and GST number
     Body: {
+        "username": "vendor1",
         "gst_no": "29ABCDE1234F1Z5",
         "new_password": "newpassword123",
         "new_password_confirm": "newpassword123"
@@ -131,11 +137,18 @@ def reset_password(request):
     serializer = ResetPasswordSerializer(data=request.data)
     
     if serializer.is_valid():
+        username = serializer.validated_data['username']
         gst_no = serializer.validated_data['gst_no']
         new_password = serializer.validated_data['new_password']
         
-        vendor = Vendor.objects.get(gst_no=gst_no)
-        user = vendor.user
+        user = User.objects.get(username=username)
+        vendor = user.vendor_profile
+        
+        # Double-check GST matches (already validated in serializer, but extra safety)
+        if vendor.gst_no != gst_no:
+            return Response({
+                'error': 'Username and GST number do not match.'
+            }, status=status.HTTP_400_BAD_REQUEST)
         
         # Set new password
         user.set_password(new_password)

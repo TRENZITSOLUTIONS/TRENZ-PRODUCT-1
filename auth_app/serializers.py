@@ -101,22 +101,38 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 class ForgotPasswordSerializer(serializers.Serializer):
-    """Serializer for verifying GST number to initiate password reset"""
+    """Serializer for verifying username and GST number to initiate password reset"""
+    username = serializers.CharField(required=True)
     gst_no = serializers.CharField(required=True, max_length=50)
     
-    def validate_gst_no(self, value):
+    def validate(self, attrs):
+        username = attrs.get('username')
+        gst_no = attrs.get('gst_no')
+        
+        # Verify both username and GST number match
         try:
-            vendor = Vendor.objects.get(gst_no=value)
-            if not vendor.is_approved:
-                raise serializers.ValidationError('Your vendor account is pending approval. Please contact admin.')
-            if not vendor.user.is_active:
-                raise serializers.ValidationError('Your account is inactive. Please contact admin.')
-        except Vendor.DoesNotExist:
-            raise serializers.ValidationError('GST number not found. Please check and try again.')
-        return value
+            user = User.objects.get(username=username)
+            try:
+                vendor = user.vendor_profile
+                # Check if GST number matches
+                if vendor.gst_no != gst_no:
+                    raise serializers.ValidationError('Username and GST number do not match.')
+                
+                # Check if vendor is approved
+                if not vendor.is_approved:
+                    raise serializers.ValidationError('Your vendor account is pending approval. Please contact admin.')
+                if not vendor.user.is_active:
+                    raise serializers.ValidationError('Your account is inactive. Please contact admin.')
+            except Vendor.DoesNotExist:
+                raise serializers.ValidationError('Username does not belong to a vendor account.')
+        except User.DoesNotExist:
+            raise serializers.ValidationError('Username not found. Please check and try again.')
+        
+        return attrs
 
 class ResetPasswordSerializer(serializers.Serializer):
-    """Serializer for resetting password after GST verification"""
+    """Serializer for resetting password after username and GST verification"""
+    username = serializers.CharField(required=True)
     gst_no = serializers.CharField(required=True, max_length=50)
     new_password = serializers.CharField(required=True, write_only=True, min_length=6)
     new_password_confirm = serializers.CharField(required=True, write_only=True, min_length=6)
@@ -125,15 +141,27 @@ class ResetPasswordSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['new_password_confirm']:
             raise serializers.ValidationError({'new_password': 'Passwords do not match.'})
         
-        # Verify GST number exists
+        username = attrs.get('username')
+        gst_no = attrs.get('gst_no')
+        
+        # Verify both username and GST number match
         try:
-            vendor = Vendor.objects.get(gst_no=attrs['gst_no'])
-            if not vendor.is_approved:
-                raise serializers.ValidationError('Your vendor account is pending approval.')
-            if not vendor.user.is_active:
-                raise serializers.ValidationError('Your account is inactive.')
-        except Vendor.DoesNotExist:
-            raise serializers.ValidationError('GST number not found.')
+            user = User.objects.get(username=username)
+            try:
+                vendor = user.vendor_profile
+                # Check if GST number matches
+                if vendor.gst_no != gst_no:
+                    raise serializers.ValidationError('Username and GST number do not match.')
+                
+                # Check if vendor is approved
+                if not vendor.is_approved:
+                    raise serializers.ValidationError('Your vendor account is pending approval.')
+                if not vendor.user.is_active:
+                    raise serializers.ValidationError('Your account is inactive.')
+            except Vendor.DoesNotExist:
+                raise serializers.ValidationError('Username does not belong to a vendor account.')
+        except User.DoesNotExist:
+            raise serializers.ValidationError('Username not found.')
         
         return attrs
 

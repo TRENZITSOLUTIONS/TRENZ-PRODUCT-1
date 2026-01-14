@@ -229,39 +229,54 @@ Authorization: Token <your_token>
 
 ---
 
-### Forgot Password (Verify GST Number)
+### Forgot Password (Verify Username and GST Number)
 
 **POST** `/auth/forgot-password`
 
 **No authentication required**
 
-Verifies the GST number to initiate password reset flow. This is the first step in password reset.
+Verifies the username and GST number to initiate password reset flow. This is the first step in password reset. Both username and GST number must match the same vendor account.
 
 **Request Body:**
 ```json
 {
+  "username": "vendor1",
   "gst_no": "29ABCDE1234F1Z5"
 }
 ```
 
+**Field Descriptions:**
+- `username`: Username of the vendor account (required)
+- `gst_no`: GST number of the vendor account (required, must match the username)
+
 **Success Response (200):**
 ```json
 {
-  "message": "GST number verified. You can now reset your password.",
+  "message": "Username and GST number verified. You can now reset your password.",
+  "username": "vendor1",
   "gst_no": "29ABCDE1234F1Z5",
-  "business_name": "ABC Store",
-  "username": "vendor1"
+  "business_name": "ABC Store"
 }
 ```
 
 **Error Responses:**
 
-**GST Not Found (400):**
+**Username Not Found (400):**
 ```json
 {
-  "error": "GST number verification failed",
+  "error": "Username and GST number verification failed",
   "details": {
-    "gst_no": ["GST number not found. Please check and try again."]
+    "non_field_errors": ["Username not found. Please check and try again."]
+  }
+}
+```
+
+**Username and GST Don't Match (400):**
+```json
+{
+  "error": "Username and GST number verification failed",
+  "details": {
+    "non_field_errors": ["Username and GST number do not match."]
   }
 }
 ```
@@ -269,9 +284,9 @@ Verifies the GST number to initiate password reset flow. This is the first step 
 **Account Pending Approval (400):**
 ```json
 {
-  "error": "GST number verification failed",
+  "error": "Username and GST number verification failed",
   "details": {
-    "gst_no": ["Your vendor account is pending approval. Please contact admin."]
+    "non_field_errors": ["Your vendor account is pending approval. Please contact admin."]
   }
 }
 ```
@@ -279,9 +294,9 @@ Verifies the GST number to initiate password reset flow. This is the first step 
 **Account Inactive (400):**
 ```json
 {
-  "error": "GST number verification failed",
+  "error": "Username and GST number verification failed",
   "details": {
-    "gst_no": ["Your account is inactive. Please contact admin."]
+    "non_field_errors": ["Your account is inactive. Please contact admin."]
   }
 }
 ```
@@ -290,7 +305,7 @@ Verifies the GST number to initiate password reset flow. This is the first step 
 ```bash
 curl -X POST http://localhost:8000/auth/forgot-password \
   -H "Content-Type: application/json" \
-  -d '{"gst_no": "29ABCDE1234F1Z5"}'
+  -d '{"username": "vendor1", "gst_no": "29ABCDE1234F1Z5"}'
 ```
 
 ---
@@ -301,11 +316,12 @@ curl -X POST http://localhost:8000/auth/forgot-password \
 
 **No authentication required**
 
-Resets the password for a vendor account using their GST number. This is the second step after verifying GST number.
+Resets the password for a vendor account using their username and GST number. This is the second step after verifying username and GST number.
 
 **Request Body:**
 ```json
 {
+  "username": "vendor1",
   "gst_no": "29ABCDE1234F1Z5",
   "new_password": "newpassword123",
   "new_password_confirm": "newpassword123"
@@ -313,7 +329,8 @@ Resets the password for a vendor account using their GST number. This is the sec
 ```
 
 **Field Descriptions:**
-- `gst_no`: GST number (must match the one verified in forgot-password step)
+- `username`: Username of the vendor account (required, must match forgot-password step)
+- `gst_no`: GST number (required, must match the username and forgot-password step)
 - `new_password`: New password (minimum 6 characters, required)
 - `new_password_confirm`: Password confirmation (must match new_password, required)
 
@@ -337,12 +354,22 @@ Resets the password for a vendor account using their GST number. This is the sec
 }
 ```
 
-**GST Not Found (400):**
+**Username and GST Don't Match (400):**
 ```json
 {
   "error": "Password reset failed",
   "details": {
-    "gst_no": ["GST number not found."]
+    "non_field_errors": ["Username and GST number do not match."]
+  }
+}
+```
+
+**Username Not Found (400):**
+```json
+{
+  "error": "Password reset failed",
+  "details": {
+    "non_field_errors": ["Username not found."]
   }
 }
 ```
@@ -352,7 +379,7 @@ Resets the password for a vendor account using their GST number. This is the sec
 {
   "error": "Password reset failed",
   "details": {
-    "gst_no": ["Your vendor account is pending approval."]
+    "non_field_errors": ["Your vendor account is pending approval."]
   }
 }
 ```
@@ -362,6 +389,7 @@ Resets the password for a vendor account using their GST number. This is the sec
 curl -X POST http://localhost:8000/auth/reset-password \
   -H "Content-Type: application/json" \
   -d '{
+    "username": "vendor1",
     "gst_no": "29ABCDE1234F1Z5",
     "new_password": "newpassword123",
     "new_password_confirm": "newpassword123"
@@ -370,9 +398,9 @@ curl -X POST http://localhost:8000/auth/reset-password \
 
 **Password Reset Flow:**
 1. User forgets password
-2. User enters GST number → `POST /auth/forgot-password`
-3. System verifies GST number and returns confirmation
-4. User enters new password → `POST /auth/reset-password`
+2. User enters username and GST number → `POST /auth/forgot-password`
+3. System verifies username and GST number match and returns confirmation
+4. User enters new password with username and GST → `POST /auth/reset-password`
 5. Password is reset, all existing tokens are invalidated
 6. User can now login with new password
 
